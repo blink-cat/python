@@ -1,8 +1,8 @@
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl import load_workbook
-import requests,json,matplotlib,pymysql
-head={
+import requests,json,pymysql,re,sys#,matplotlib
+'''head={
 'Accept-Encoding':'gzip, deflate',
 'Accept-Language':'zh-CN,zh;q=0.8',
 'Connection':'keep-alive',
@@ -16,27 +16,47 @@ head={
 'X-Anit-Forge-Code':0,
 'X-Anit-Forge-Token':None,
 'X-Requested-With':'XMLHttpReques',
-}
+}'''
 url='http://www.lagou.com/jobs/positionAjax.json?px=default&city=%E6%B7%B1%E5%9C%B3&needAddtionalResult=false'
 raw_json,company_name,position_id=[],[],[]
-f_out=open('C:/Users/yangmengcheng/Desktop/json.json','w+')
-conn=pymysql.connect('localhost','root','123SQL','company').cursor()
-for pageid in range(1,30):
-	data={'first':'true','pn':pageid,'kd':'数据挖掘'}
+def connect():
+	conn=pymysql.connect('localhost','root','123SQL','company')
+	cursor=conn.cursor()
+	return (conn,cursor)
+def close():
+	conn.close()
+	cursor.close()
+def get_html(url,postdata):
+	response=requests.post(url,data=data)
+	return str(response.content)
+input_job=sys.argv[1]
+input_city=sys.argv[2]
+html=get_html('http://www.lagou.com/jobs/list_'+input_job+'?city='+input_city+'&cl=false&fromSearch=true&labelWords=&suginput=')
+totaljobs=int(re.findall('id="tab_pos".*(\d+)')[0])
+totalpage=[i for i in range(1,totaljobs) if 445-i*15>=0][-1]+1
+cursor=connect()[1]
+for pageid in range(1,totalpage+1):
+	data={'first':'true','pn':pageid,'kd':''}
 	if pageid>1:
 		data['first']='false'
 	else:	
 		data['first']='false'
-	response=requests.post(url,headers=head,data=data)
-	company_json={i:response.json()['content']['positionResult'][i] for i in  response.json()['content']['positionResult'] if i=='result'}
-	
+	response=requests.post(url,data=data)#,headers=head
+	company_json=[i for i in  response.json()['content']['positionResult']['result'] ]
 	f_out.write(str(raw_json))
-	company=response.json()['content']['positionResult']['result']
-	for com_iter in company:
-		#print(i['companyFullName'])
-		company_name.append(com_iter['companyFullName'])
-
-
-lista=set(company_name)
+	j=0
+	#A-companyId,B-positionName,C-city,D-companySize,E-salary,F-positionAdvantage,G-industryField,H-positionId,
+	#I-createTime,J-workYear,K-businessZone,L-companyShortName,M-education,N-financeStage
+	info_list=['companyId','positionName','city','companySize','salary','positionAdvantage','industryField','positionId','workYear','companyShortName','education','financeStage']
+	for com_iter in company_json:
+		for c_iter in com_iter:
+			if type(com_iter[c_iter])== 'str' and c_iter in info_list:
+				cursor.execute('insert into shenzhen(%s) values(%s)'%(c_iter,com_iter[c_iter])
+			else:	
+				cursor.execute('insert into shenzhen(%s) values(%d)'%(c_iter,com_iter[c_iter])
+cursor.commit()
+close()
+#print(company_json)
+#lista=set(company_name)
 #print(lista)
 #print(len(company_name))
